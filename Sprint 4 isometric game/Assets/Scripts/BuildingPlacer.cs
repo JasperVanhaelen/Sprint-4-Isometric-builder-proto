@@ -90,22 +90,20 @@ public class BuildingPlacer : MonoBehaviour
         Vector3 position = currentBuilding.transform.position;
         Vector3 snappedPosition = SnapToIsometricGrid(position);
 
+        // Convert snapped position to grid coordinates
         Vector2Int tilePosition = WorldToGrid(snappedPosition);
-        int buildingSize = 5; // Assuming a 5x5 building size
 
-        if (CanPlaceBuilding(tilePosition, buildingSize))
+        // Check if the tile is buildable
+        if (gridState.ContainsKey(tilePosition) && gridState[tilePosition] == TileState.Empty)
         {
-            // Mark all occupied tiles
-            for (int x = -buildingSize / 2; x <= buildingSize / 2; x++)
-            {
-                for (int y = -buildingSize / 2; y <= buildingSize / 2; y++)
-                {
-                    Vector2Int tile = new Vector2Int(tilePosition.x + x, tilePosition.y + y);
-                    gridState[tile] = TileState.Occupied;
-                }
-            }
+            // Mark the tile as occupied
+            gridState[tilePosition] = TileState.Occupied;
 
+            // Instantiate the building
             Instantiate(buildingPrefab, snappedPosition, Quaternion.identity);
+
+            // Reward XP for placing a building
+            EventManager.Instance.QueueEvent(new XPAddedGameEvent(50)); // Add 50 XP
 
             // Reset state
             isDragging = false;
@@ -117,6 +115,42 @@ public class BuildingPlacer : MonoBehaviour
             Debug.Log("Cannot place building here!");
         }
     }
+
+    // private void PlaceBuilding()
+    // {
+    //     Vector3 position = currentBuilding.transform.position;
+    //     Vector3 snappedPosition = SnapToIsometricGrid(position);
+
+    //     Vector2Int tilePosition = WorldToGrid(snappedPosition);
+    //     int buildingSize = 5; // Assuming a 5x5 building size
+
+    //     if (CanPlaceBuilding(tilePosition, buildingSize))
+    //     {
+    //         // Mark all occupied tiles
+    //         for (int x = -buildingSize / 2; x <= buildingSize / 2; x++)
+    //         {
+    //             for (int y = -buildingSize / 2; y <= buildingSize / 2; y++)
+    //             {
+    //                 Vector2Int tile = new Vector2Int(tilePosition.x + x, tilePosition.y + y);
+    //                 gridState[tile] = TileState.Occupied;
+    //             }
+    //         }
+
+    //         Instantiate(buildingPrefab, snappedPosition, Quaternion.identity);
+
+    //         // Reward XP for placing a building
+    //         EventManager.Instance.QueueEvent(new XPAddedGameEvent(50)); // Add 50 XP
+
+    //         // Reset state
+    //         isDragging = false;
+    //         Cursor.visible = true; // Restore cursor
+    //         Destroy(currentBuilding);
+    //     }
+    //     else
+    //     {
+    //         Debug.Log("Cannot place building here!");
+    //     }
+    // }
 
     private bool CanPlaceBuilding(Vector2Int center, int size)
     {

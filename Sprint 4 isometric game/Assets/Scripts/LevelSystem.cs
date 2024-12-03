@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class LevelSystem : MonoBehaviour
 {
     private int XPNow;
-    private int Level;
+    public int Level = 1; // Start at level 1
     private int xpToNext;
 
     [SerializeField]
@@ -44,6 +44,11 @@ public class LevelSystem : MonoBehaviour
         }
 
         xpToNextLevel.TryGetValue(Level, out xpToNext);
+        if (xpToNext == 0)
+        {
+            Debug.LogError($"XP to next level not found for Level {Level}. Defaulting to 100.");
+            xpToNext = 100; // Fallback value
+        }
     }
 
     private static void Initialize()
@@ -94,6 +99,7 @@ public class LevelSystem : MonoBehaviour
     {
         EventManager.Instance.AddListener<XPAddedGameEvent>(OnXPAdded);
         EventManager.Instance.AddListener<LevelChangedGameEvent>(OnLevelChanged);
+        Debug.Log("Subscribing OnLevelChanged to LevelChangedGameEvent");
         UpdateUI();
     }
 
@@ -106,28 +112,62 @@ public class LevelSystem : MonoBehaviour
     private void OnXPAdded(XPAddedGameEvent info)
     {
         XPNow += info.amount;
-        UpdateUI();
 
-        if (XPNow >= xpToNext)
+        while (XPNow >= xpToNext) // Loop to handle multiple level-ups
         {
-            Level++;
-            EventManager.Instance.QueueEvent(new LevelChangedGameEvent(Level));
+            Level++; // Increment level
+            XPNow -= xpToNext; // Subtract current level's XP requirement
+
+            if (xpToNextLevel.TryGetValue(Level, out xpToNext))
+            {
+                EventManager.Instance.QueueEvent(new LevelChangedGameEvent(Level));
+                Debug.Log($"Levelled up to {Level}. New xpToNext: {xpToNext}, XPNow: {XPNow}");
+            }
+            else
+            {
+                Debug.LogError($"XP requirements for level {Level} not found! Stopping level-up.");
+                xpToNext = int.MaxValue; // Prevent infinite leveling
+                break;
+            }
         }
+
+        UpdateUI(); // Update the UI after XP and level changes
     }
 
     private void OnLevelChanged(LevelChangedGameEvent info)
     {
-        XPNow -= xpToNext;
-        xpToNext = xpToNextLevel[info.NewLvl];
-        lvlText.text = (info.NewLvl + 1).ToString();
-        UpdateUI();
+        // Update the level display text (Level starts at 1 in UI)
+        lvlText.text = info.NewLvl.ToString();
 
-        GameObject window = Instantiate(lvlWindowPrefab, GameManager.current.canvas.transform);
-        window.transform.GetChild(1).GetComponent<Button>().onClick.AddListener(() => Destroy(window));
-
-        foreach (var reward in lvlReward[info.NewLvl])
+        // Create the level-up window
+        if (lvlWindowPrefab != null)
         {
-            EventManager.Instance.QueueEvent(new CurrencyChangeGameEvent(reward, CurrencyType.Coins));
+            GameObject window = Instantiate(lvlWindowPrefab, GameManager.current.canvas.transform);
+
+            // Safely find the close button
+            Button closeButton = window.GetComponentInChildren<Button>();
+            if (closeButton != null)
+            {
+                closeButton.onClick.AddListener(() => Destroy(window));
+            }
+            else
+            {
+                Debug.LogError("Level-up window prefab is missing a button!");
+            }
+        }
+
+        // Distribute rewards for the new level
+        if (lvlReward.TryGetValue(info.NewLvl, out int[] rewards))
+        {
+            foreach (var reward in rewards)
+            {
+                Debug.Log($"Processing reward: {reward} for Coins at level {info.NewLvl}");
+                EventManager.Instance.QueueEvent(new CurrencyChangeGameEvent(reward, CurrencyType.Coins));
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"No rewards defined for level {info.NewLvl}!");
         }
     }
 }
